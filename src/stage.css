@@ -94,7 +94,9 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
 .presets:disabled { opacity: .6; }
 .preset { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
 .preset input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-select { height: 34px; padding: 0 10px; background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: 400 14px var(--font-mono); }
+/* Own arrow instead of the native one, so it sits 12px from the edge; fixed width lines up the column. */
+select { appearance: none; width: 108px; height: 34px; padding: 0 32px 0 12px; color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: 400 14px var(--font-mono); cursor: pointer;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%238f8f8f' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 12px center; }
 select:focus-visible { outline-offset: 0; border-color: var(--accent); }
 
 /* Devices: plain CSS frames. The iframe renders at real device width and is scaled down. */
@@ -110,7 +112,9 @@ select:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .device--phone .device__screen { border-radius: 18px; }
 .device__screen iframe { width: calc(var(--w) * 1px); height: calc(var(--h) * 1px); border: 0; display: block; transform: scale(var(--s)); transform-origin: 0 0; }
 .device__info { display: grid; gap: 4px; font-size: 14px; max-width: calc(var(--w) * var(--s) * 1px + 20px); }
-.flag-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+/* Reason on its own line under the flag name, so narrow phone captions line up the same as the laptop's. */
+.flag-line { display: grid; }
+.flag-line > :not(.status) { padding-left: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0ms !important; }
