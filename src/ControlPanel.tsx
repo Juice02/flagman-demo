@@ -1,0 +1,147 @@
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { DASHBOARD_URL, ENVIRONMENT, PROJECT_ID } from './api'
+import { readConfig, readRules, write, type Config } from './admin'
+import { FLAGS, PRESETS, presetFor, type FlagKey, type Preset, type Rule, type Write } from './allowlist'
+
+const DESCRIPTIONS: Record<FlagKey, string> = {
+  'dark-mode': 'Switches Book Logger to its dark theme.',
+  'hide-non-fiction': 'Hides non-fiction books from the list.',
+}
+
+export function ControlPanel() {
+  return (
+    <aside className="cp" aria-labelledby="cp-title">
+      <div className="cp__head">
+        <h1 id="cp-title">Control panel</h1>
+        <p className="muted small">Project {PROJECT_ID ?? '—'} · <span className="mono">{ENVIRONMENT}</span></p>
+      </div>
+      {PROJECT_ID === null ? (
+        <p className="error">Set VITE_FLAGMAN_PROJECT_ID in .env (npm run seed prints it), then restart npm run dev.</p>
+      ) : (
+        FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)
+      )}
+      <a className="link small" href={DASHBOARD_URL} target="_blank" rel="noreferrer">Open the full dashboard ↗</a>
+    </aside>
+  )
+}
+
+function FlagControls({ flagKey }: { flagKey: FlagKey }) {
+  const [config, setConfig] = useState<Config | null>(null)
+  const [rules, setRules] = useState<Rule[]>([])
+  const [rollout, setRollout] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const [c, r] = await Promise.all([readConfig(flagKey), readRules(flagKey)])
+    setConfig(c)
+    setRollout(c.rolloutPercentage)
+    setRules(r)
+  }, [flagKey])
+
+  useEffect(() => {
+    load().catch((e: Error) => setError(e.message))
+  }, [load])
+
+  // Runs the writes in order, then re-reads FlagMan so the panel shows what is stored.
+  async function run(...ops: Write[]) {
+    setBusy(true)
+    setError(null)
+    try {
+      for (const op of ops) await write(op)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    await load().catch((e: Error) => setError(e.message))
+    setBusy(false)
+  }
+
+  const others = rules.filter((r) => !presetFor(r)).length
+
+  return (
+    <section className="panel" aria-labelledby={`flag-${flagKey}`}>
+      <div className="flag-head">
+        <h2 id={`flag-${flagKey}`} className="mono">{flagKey}</h2>
+        <span className={'status' + (config?.enabled ? ' status--on' : '')}>
+          {config ? (config.enabled ? `On · ${config.rolloutPercentage}%` : 'Off') : '…'}
+        </span>
+      </div>
+      <p className="muted small">{DESCRIPTIONS[flagKey]}</p>
+
+      {config && (
+        <div className="config">
+          <div className="config__row">
+            <span className="config__label" id={`enabled-${flagKey}`}>Enabled</span>
+            <button
+              type="button" role="switch" className="switch" aria-checked={config.enabled} aria-labelledby={`enabled-${flagKey}`}
+              disabled={busy} onClick={() => run({ kind: 'config', flagKey, change: { enabled: !config.enabled } })}
+            >
+              <span className="switch__thumb" />
+            </button>
+          </div>
+
+          <div className="config__row">
+            <label className="config__label" htmlFor={`rollout-${flagKey}`}>Rollout</label>
+            <div className="rollout">
+              <input
+                id={`rollout-${flagKey}`} type="range" min={0} max={100} value={rollout}
+                onChange={(e) => setRollout(Number(e.target.value))}
+                style={{ '--fill': `${rollout}%` } as CSSProperties}
+              />
+              <span className="rollout__value mono">{rollout}%</span>
+              <button
+                type="button" className="btn btn--primary btn--sm"
+                disabled={busy || rollout === config.rolloutPercentage}
+                onClick={() => run({ kind: 'config', flagKey, change: { rolloutPercentage: rollout } })}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <fieldset className="presets" disabled={busy}>
+            <legend className="config__label">Rules <span className="muted small">(all must match)</span></legend>
+            {PRESETS.map((p) => (
+              <PresetRow key={p.id} flagKey={flagKey} preset={p} rule={rules.find((r) => presetFor(r) === p)} run={run} />
+            ))}
+            {others > 0 && <p className="muted small">{others} other rule{others > 1 ? 's' : ''} on this config, managed in the dashboard.</p>}
+          </fieldset>
+        </div>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+  )
+}
+
+function PresetRow({ flagKey, preset, rule, run }: {
+  flagKey: FlagKey
+  preset: Preset
+  rule: Rule | undefined
+  run: (...ops: Write[]) => void
+}) {
+  const [picked, setPicked] = useState<string>(preset.values[0])
+  const value = rule?.value ?? picked
+  const shape = (v: string) => ({ attribute: preset.attribute, operator: preset.operator, value: v })
+  const id = `${flagKey}-${preset.id}`
+
+  return (
+    <div className="preset">
+      <input
+        id={id} type="checkbox" checked={rule !== undefined}
+        onChange={(e) => e.target.checked
+          ? run({ kind: 'createRule', flagKey, rule: shape(value) })
+          : rule && run({ kind: 'deleteRule', flagKey, ruleId: rule.ruleId })}
+      />
+      <label htmlFor={id}>{preset.label}</label>
+      <select
+        aria-label={`${preset.label} (value)`} value={value}
+        onChange={(e) => {
+          setPicked(e.target.value)
+          if (rule) run({ kind: 'deleteRule', flagKey, ruleId: rule.ruleId }, { kind: 'createRule', flagKey, rule: shape(e.target.value) })
+        }}
+      >
+        {preset.values.map((v) => <option key={v} value={v}>{v.replace(',', ', ')}</option>)}
+      </select>
+    </div>
+  )
+}
