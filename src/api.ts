@@ -4,7 +4,6 @@ const env = import.meta.env
 const ENVIRONMENTS = ['DEV', 'STAGING', 'PREPROD', 'PROD']
 
 export const API_URL: string = env.VITE_FLAGMAN_API_URL || 'http://localhost:8081'
-export const DASHBOARD_URL: string = env.VITE_DASHBOARD_URL || 'http://localhost:8080'
 const id = Number(env.VITE_FLAGMAN_PROJECT_ID)
 export const PROJECT_ID: number | null = Number.isInteger(id) && id > 0 ? id : null
 export const ENVIRONMENT: string = ENVIRONMENTS.includes(env.VITE_FLAGMAN_ENVIRONMENT) ? env.VITE_FLAGMAN_ENVIRONMENT : 'DEV'

@@ -32,7 +32,7 @@ The control panel offers an on/off switch, a rollout slider and three preset rul
 | Country is one of [IN,GB \| IN \| GB \| US] | `country IN <value>` |
 | Plan equals [pro \| free] | `plan EQUALS <value>` |
 
-Anything else (other rules, other environments, new flags) is done in the full dashboard.
+Rules added elsewhere (for example in the FlagMan dashboard) still apply; the panel counts them but does not show or change them.
 
 ## Running it
 
@@ -65,7 +65,6 @@ Needs Node 22+ and a running FlagMan.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VITE_FLAGMAN_API_URL` | `http://localhost:8081` | FlagMan API the browser calls |
-| `VITE_DASHBOARD_URL` | `http://localhost:8080` | Target of "Open the full dashboard" |
 | `VITE_FLAGMAN_PROJECT_ID` | none | Project created by `npm run seed` |
 | `VITE_FLAGMAN_ENVIRONMENT` | `DEV` | Environment the panel edits and the devices evaluate |
 
@@ -97,6 +96,8 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   HTML from strings.
 - **Embedding.** The stage embeds only its own `/app.html`, built from the fixed demo users, and every
   iframe has a `title`.
+- **No link to the full dashboard.** The dashboard can change any flag, rule or project, and FlagMan
+  has no login, so linking to it from the demo would bypass the presets.
 - **Errors.** The UI shows the API's `detail` message or a short fixed line, never a raw response.
   When FlagMan can't be reached, the devices keep the last result and show a short note.
 - **Dependencies.** Only the Vite react-ts template packages.

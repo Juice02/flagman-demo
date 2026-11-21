@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-import { DASHBOARD_URL, ENVIRONMENT, PROJECT_ID } from './api'
+import { ENVIRONMENT, PROJECT_ID } from './api'
 import { readConfig, readRules, write, type Config } from './admin'
 import { FLAGS, PRESETS, presetFor, type FlagKey, type Preset, type Rule, type Write } from './allowlist'
 
@@ -20,7 +20,6 @@ export function ControlPanel() {
       ) : (
         FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)
       )}
-      <a className="link small" href={DASHBOARD_URL} target="_blank" rel="noreferrer">Open the full dashboard ↗</a>
     </aside>
   )
 }
@@ -104,7 +103,7 @@ function FlagControls({ flagKey }: { flagKey: FlagKey }) {
             {PRESETS.map((p) => (
               <PresetRow key={p.id} flagKey={flagKey} preset={p} rule={rules.find((r) => presetFor(r) === p)} run={run} />
             ))}
-            {others > 0 && <p className="muted small">{others} other rule{others > 1 ? 's' : ''} on this config, managed in the dashboard.</p>}
+            {others > 0 && <p className="muted small">{others} other rule{others > 1 ? 's' : ''} on this config also {others > 1 ? 'apply' : 'applies'}.</p>}
           </fieldset>
         </div>
       )}
