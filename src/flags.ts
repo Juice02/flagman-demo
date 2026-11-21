@@ -3,21 +3,24 @@ import { API_URL, ENVIRONMENT, PROJECT_ID } from './api'
 import type { User } from './allowlist'
 import { evaluate, isSnapshot, type Reason, type Snapshot } from './evaluate'
 
-// Flag client. A top-level page (the stage, or Book Logger opened on its own) holds one stream from
-// FlagMan and evaluates flags locally. Inside the stage, each device iframe gets the stage's copy by
-// postMessage instead, so a tab uses one connection: browsers allow only 6 per origin over HTTP/1.1.
+// Flag client. All demo pages open in this browser (the stage, its device iframes, other tabs) share one
+// stream from FlagMan: one page holds a Web Lock, opens the stream and passes each snapshot to the others
+// over a BroadcastChannel. Browsers allow only 6 connections per host over HTTP/1.1, so one stream per
+// page would hang every request to FlagMan once six demo pages were open. When the page holding the
+// lock closes, the lock passes to another page, which opens the stream. Flags are evaluated locally.
 
 type State = { snapshot: Snapshot | null; error: string | null }
 
 let state: State = { snapshot: null, error: null }
+let leader = false
 const listeners = new Set<() => void>()
-const embedded = window.parent !== window
+const NAME = `flagman:${PROJECT_ID}:${ENVIRONMENT}`
+const channel = new BroadcastChannel(NAME)
 
 function setState(next: State) {
   state = next
   listeners.forEach((listener) => listener())
-  // Pass every update on to this page's own iframes (the stage's devices); a device has none.
-  for (let i = 0; i < window.frames.length; i++) window.frames[i].postMessage(state, location.origin)
+  if (leader) channel.postMessage(state) // the sender doesn't receive its own message
 }
 
 let started = false
@@ -25,26 +28,29 @@ function start() {
   if (started) return
   started = true
 
-  if (embedded) {
-    // Messages are untrusted input: accept only the parent page, from this origin, with the right shape.
-    addEventListener('message', (e) => {
-      if (e.source !== window.parent || e.origin !== location.origin) return
-      const d = e.data as State
-      const ok = typeof d === 'object' && d !== null && (d.snapshot === null || isSnapshot(d.snapshot))
-        && (d.error === null || typeof d.error === 'string')
-      if (ok) setState({ snapshot: d.snapshot, error: d.error })
-    })
-    window.parent.postMessage('flagman:ready', location.origin) // ask for the current state if we loaded late
-    return
-  }
-
-  // Answer device iframes that load after the first snapshot arrived.
-  addEventListener('message', (e) => {
-    if (e.origin === location.origin && e.data === 'flagman:ready' && e.source) {
-      (e.source as Window).postMessage(state, location.origin)
+  // Same-origin pages only, but still checked before use like any other input.
+  channel.onmessage = (e) => {
+    if (e.data === 'ready') {
+      if (leader) channel.postMessage(state) // a page that opened later asks for the current state
+      return
     }
-  })
+    const d = e.data as State
+    const ok = typeof d === 'object' && d !== null && (d.snapshot === null || isSnapshot(d.snapshot))
+      && (d.error === null || typeof d.error === 'string')
+    if (ok && !leader) setState({ snapshot: d.snapshot, error: d.error })
+  }
+  channel.postMessage('ready')
 
+  const lead = () => {
+    leader = true
+    openStream()
+  }
+  // Web Locks need a secure context (HTTPS or localhost); without them every page streams on its own.
+  if (navigator.locks) navigator.locks.request(NAME, () => new Promise(() => lead())) // held until the page closes
+  else lead()
+}
+
+function openStream() {
   if (PROJECT_ID === null) {
     setState({ snapshot: null, error: 'Set VITE_FLAGMAN_PROJECT_ID in .env.' })
     return

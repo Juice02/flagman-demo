@@ -37,16 +37,19 @@ Rules added elsewhere (for example in the FlagMan dashboard) still apply; the pa
 
 ## How changes reach the devices
 
-The stage opens one stream to FlagMan (`GET /projects/{id}/environments/{env}/stream`, Server-Sent
+One page opens a stream to FlagMan (`GET /projects/{id}/environments/{env}/stream`, Server-Sent
 Events). FlagMan sends a snapshot of every flag in that environment (enabled, rollout, rules) when the
-stream opens and again after each change is committed. The stage passes each snapshot to its three
-device iframes with `postMessage`, and each device evaluates its flags in the browser with
-`src/evaluate.ts`, a copy of FlagMan's `Evaluator`. Nothing polls: while no flag changes, the demo sends
+stream opens and again after each change is committed. That page passes each snapshot to every other
+demo page in the browser (the device iframes and other tabs) over a `BroadcastChannel`, and each device
+evaluates its flags in the browser with `src/evaluate.ts`, a copy of FlagMan's `Evaluator`. Nothing polls: while no flag changes, the demo sends
 no requests. The panel re-reads its configs when a new snapshot arrives, so changes made elsewhere
 show up without a reload.
 
-One stream per tab, not per device, because browsers allow only 6 connections per origin over
-HTTP/1.1. Book Logger opened on its own (`/app.html`) opens its own stream. If FlagMan stops, the
+One stream per browser, not per page, because browsers allow only 6 connections per host over
+HTTP/1.1: with a stream per page, six open demo pages would leave no connection for anything else and
+every request to FlagMan would hang. The page that holds a Web Lock (`navigator.locks`) opens the
+stream; when it closes, the lock passes to another open page, which opens the stream instead. Web
+Locks need HTTPS or localhost; without them each page opens its own stream. If FlagMan stops, the
 browser's `EventSource` keeps retrying; the devices keep the last snapshot and show a short note
 until it reconnects.
 
@@ -96,7 +99,7 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 |------|--------------|
 | `src/allowlist.ts` | The demo flags, users, attribute values and preset rules, plus `checkWrite` and `userFromParams` |
 | `src/admin.ts` | `write()`, the only function that changes FlagMan; runs `checkWrite` first |
-| `src/flags.ts` | The flag client: holds the stream (or, in an iframe, takes the stage's snapshots), `useFlag`, `useFlagState`, `isEnabled` |
+| `src/flags.ts` | The flag client: one stream per browser shared over a `BroadcastChannel`, `useFlag`, `useFlagState`, `isEnabled` |
 | `src/evaluate.ts` | Flag evaluation in the browser, a copy of FlagMan's `Evaluator.java`, and the snapshot shape check |
 | `scripts/evaluation-cases.json` | Cases shared with FlagMan (copied from `../flagman/src/test/resources`; keep the two files the same) |
 | `src/ControlPanel.tsx`, `src/main.tsx` | Stage page |
@@ -119,8 +122,8 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   iframe has a `title`.
 - **No link to the full dashboard.** The dashboard can change any flag, rule or project, and FlagMan
   has no login, so linking to it from the demo would bypass the presets.
-- **Snapshots are checked before use.** A device accepts a `postMessage` only from its parent page on
-  the same origin, and every snapshot (from the stream or a message) must match the expected shape.
+- **Snapshots are checked before use.** Only same-origin pages can use the `BroadcastChannel`, and
+  every snapshot, from the stream or the channel, must match the expected shape.
 - **Errors.** The UI shows the API's `detail` message or a short fixed line, never a raw response.
   When FlagMan can't be reached, the devices keep the last result and show a short note.
 - **Dependencies.** Only the Vite react-ts template packages.
