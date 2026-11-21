@@ -2,7 +2,7 @@
 
 A feature flag only shows its value when you can see the app change for different users. This demo
 puts a small feature flag config next to three devices running the same app, so a change to a flag in
-[FlagMan](../flagman) shows up on each device within about two seconds.
+[FlagMan](../flagman) shows up on each device as soon as it is saved.
 
 ## What it shows
 
@@ -17,8 +17,8 @@ puts a small feature flag config next to three devices running the same app, so 
 
   A user is in the rollout when `CRC32(flagKey + ":" + userId) % 100 < rolloutPercentage`, so moving a
   rollout from 0 to 100 turns the devices on one at a time. Under each device are its attributes and
-  the result and reason FlagMan returns for each flag (`FLAG_DISABLED`, `RULES_NOT_MATCHED`,
-  `IN_ROLLOUT`, `OUT_OF_ROLLOUT`).
+  the result and reason for each flag (`FLAG_DISABLED`, `RULES_NOT_MATCHED`, `IN_ROLLOUT`,
+  `OUT_OF_ROLLOUT`).
 
 - **Book Logger** (`/app.html?user=…&country=…&plan=…`): a reading app's "Recommended for you"
   page, with static sample books.
@@ -34,6 +34,21 @@ The feature flag config offers an on/off switch, a rollout slider and three pres
 | Plan equals [pro \| free] | `plan EQUALS <value>` |
 
 Rules added elsewhere (for example in the FlagMan dashboard) still apply; the panel counts them but does not show or change them.
+
+## How changes reach the devices
+
+The stage opens one stream to FlagMan (`GET /projects/{id}/environments/{env}/stream`, Server-Sent
+Events). FlagMan sends a snapshot of every flag in that environment (enabled, rollout, rules) when the
+stream opens and again after each change is committed. The stage passes each snapshot to its three
+device iframes with `postMessage`, and each device evaluates its flags in the browser with
+`src/evaluate.ts`, a copy of FlagMan's `Evaluator`. Nothing polls: while no flag changes, the demo sends
+no requests. The panel re-reads its configs when a new snapshot arrives, so changes made elsewhere
+show up without a reload.
+
+One stream per tab, not per device, because browsers allow only 6 connections per origin over
+HTTP/1.1. Book Logger opened on its own (`/app.html`) opens its own stream. If FlagMan stops, the
+browser's `EventSource` keeps retrying; the devices keep the last snapshot and show a short note
+until it reconnects.
 
 ## Running it
 
@@ -59,7 +74,10 @@ Needs Node 22+ and a running FlagMan.
    npm run dev      # http://localhost:5174
    ```
 
-`npm test` runs a self-check of the write guard and the device URL parser (plain Node, no test library).
+Needs FlagMan with the snapshot stream (the `live-flags` branch of `../flagman` or later).
+
+`npm test` runs a self-check of the write guard and the device URL parser, and the evaluation cases
+shared with FlagMan (plain Node, no test library).
 
 ## Environment variables
 
@@ -78,7 +96,9 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 |------|--------------|
 | `src/allowlist.ts` | The demo flags, users, attribute values and preset rules, plus `checkWrite` and `userFromParams` |
 | `src/admin.ts` | `write()`, the only function that changes FlagMan; runs `checkWrite` first |
-| `src/flags.ts` | `isEnabled`, `evaluate` and `useFlag` (polls `POST /evaluate` every 2 s while the tab is visible) |
+| `src/flags.ts` | The flag client: holds the stream (or, in an iframe, takes the stage's snapshots), `useFlag`, `useFlagState`, `isEnabled` |
+| `src/evaluate.ts` | Flag evaluation in the browser, a copy of FlagMan's `Evaluator.java`, and the snapshot shape check |
+| `scripts/evaluation-cases.json` | Cases shared with FlagMan (copied from `../flagman/src/test/resources`; keep the two files the same) |
 | `src/ControlPanel.tsx`, `src/main.tsx` | Stage page |
 | `src/app.tsx` | Book Logger page |
 | `scripts/seed.mjs` | Creates the demo project through the API |
@@ -99,6 +119,8 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   iframe has a `title`.
 - **No link to the full dashboard.** The dashboard can change any flag, rule or project, and FlagMan
   has no login, so linking to it from the demo would bypass the presets.
+- **Snapshots are checked before use.** A device accepts a `postMessage` only from its parent page on
+  the same origin, and every snapshot (from the stream or a message) must match the expected shape.
 - **Errors.** The UI shows the API's `detail` message or a short fixed line, never a raw response.
   When FlagMan can't be reached, the devices keep the last result and show a short note.
 - **Dependencies.** Only the Vite react-ts template packages.
@@ -109,17 +131,21 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   change any flag, add any rule, delete projects. The presets guide visitors; they don't stop someone
   who opens the browser console or uses `curl`.
 - **Shared state.** All visitors edit the same project, so one visitor's change shows up for everyone.
-- **Load.** Each open stage sends 12 evaluate requests every 2 s (3 devices × 2 flags, once from the
-  device and once from its caption). That is fine locally; 100 open tabs would be about 600 requests
-  per second, with no rate limit.
+- **Rules are visible in the browser.** Snapshots carry every rule's attribute and value. The demo's
+  rules are harmless, but a rule like `email CONTAINS @bigcustomer.com` would be readable by anyone.
+  Real apps would need FlagMan to send full rules only to servers holding a secret key.
+- **Load.** Each open tab holds one idle connection; FlagMan does work only when a flag changes (one
+  snapshot per environment, sent to every open stream). Open connections still count toward the
+  server's connection limit, and nothing limits how many a visitor opens.
 
 **What hosting it would need** (not built)
 
 - A small demo backend that holds the API access, applies the same allowlist on the server and is
   the only thing that can reach FlagMan, or authentication in FlagMan itself.
 - A sandbox project per visitor (or per session), so visitors don't overwrite each other.
-- Rate limiting on writes and evaluations.
+- Rate limiting on writes and on new stream connections.
 - A nightly reset of the demo data.
 - A Content-Security-Policy (`default-src 'self'`, `connect-src` set to the API,
   `frame-ancestors 'self'`) and HTTPS.
-- Fewer requests: one batched evaluate call per device, or server-sent updates instead of polling.
+- A shared channel between FlagMan instances (e.g. Redis pub/sub) if FlagMan runs more than one
+  instance; open streams are held in one instance's memory.

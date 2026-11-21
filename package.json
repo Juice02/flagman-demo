@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "seed": "node scripts/seed.mjs",
-    "test": "node --experimental-strip-types scripts/allowlist.test.ts"
+    "test": "node --experimental-strip-types scripts/allowlist.test.ts && node --experimental-strip-types scripts/evaluate.test.ts"
   },
   "dependencies": {
     "react": "^19.3.1",

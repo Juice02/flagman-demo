@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { ENVIRONMENT, PROJECT_ID } from './api'
 import { readConfig, readRules, write, type Config } from './admin'
+import { useFlagState } from './flags'
 import { FLAGS, PRESETS, presetFor, type FlagKey, type Preset, type Rule, type Write } from './allowlist'
 
 const DESCRIPTIONS: Record<FlagKey, string> = {
@@ -38,9 +39,12 @@ function FlagControls({ flagKey }: { flagKey: FlagKey }) {
     setRules(r)
   }, [flagKey])
 
+  // Re-read whenever FlagMan announces a new revision, so changes made elsewhere (another visitor,
+  // the dashboard) show up here without a reload.
+  const revision = useFlagState().snapshot?.revision
   useEffect(() => {
     load().catch((e: Error) => setError(e.message))
-  }, [load])
+  }, [load, revision])
 
   // Runs the writes in order, then re-reads FlagMan so the panel shows what is stored.
   async function run(...ops: Write[]) {

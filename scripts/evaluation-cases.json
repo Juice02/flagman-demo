@@ -1,0 +1,491 @@
+[
+  {
+    "name": "disabled flag",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": false,
+      "rolloutPercentage": 100,
+      "rules": []
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "FLAG_DISABLED"
+    }
+  },
+  {
+    "name": "disabled wins over failing rules",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": false,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "EQUALS",
+          "value": "US"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "FLAG_DISABLED"
+    }
+  },
+  {
+    "name": "100% with no rules",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": []
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "0% with no rules",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 0,
+      "rules": []
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  },
+  {
+    "name": "bucket equal to rollout is out",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 1,
+      "rules": []
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  },
+  {
+    "name": "bucket below rollout is in",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 2,
+      "rules": []
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "flag key changes the bucket",
+    "flag": {
+      "flagKey": "hide-non-fiction",
+      "enabled": true,
+      "rolloutPercentage": 52,
+      "rules": []
+    },
+    "userId": "priya",
+    "attributes": {
+      "country": "GB",
+      "plan": "free"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  },
+  {
+    "name": "flag key changes the bucket, in",
+    "flag": {
+      "flagKey": "hide-non-fiction",
+      "enabled": true,
+      "rolloutPercentage": 53,
+      "rules": []
+    },
+    "userId": "priya",
+    "attributes": {
+      "country": "GB",
+      "plan": "free"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "CRC32 above 2^31 is read unsigned",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 66,
+      "rules": []
+    },
+    "userId": "user-2",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "CRC32 above 2^31 is read unsigned, out",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 65,
+      "rules": []
+    },
+    "userId": "user-2",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  },
+  {
+    "name": "user id hashed as UTF-8",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 90,
+      "rules": []
+    },
+    "userId": "zoë",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "user id hashed as UTF-8, out",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 89,
+      "rules": []
+    },
+    "userId": "zoë",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  },
+  {
+    "name": "NOT_EQUALS fails for that value",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "NOT_EQUALS",
+          "value": "US"
+        }
+      ]
+    },
+    "userId": "noah",
+    "attributes": {
+      "country": "US",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "NOT_EQUALS passes for another value",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "NOT_EQUALS",
+          "value": "US"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "values are case-sensitive",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "plan",
+          "operator": "EQUALS",
+          "value": "pro"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "Pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "operators are case-insensitive",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "plan",
+          "operator": "equals",
+          "value": "pro"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "IN trims each value",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "IN",
+          "value": "IN, GB"
+        }
+      ]
+    },
+    "userId": "priya",
+    "attributes": {
+      "country": "GB",
+      "plan": "free"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "IN needs a whole value",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "IN",
+          "value": "IN,GB"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "I",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "CONTAINS matches a substring",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "email",
+          "operator": "CONTAINS",
+          "value": "@example.com"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "email": "ravi@example.com"
+    },
+    "expected": {
+      "enabled": true,
+      "reason": "IN_ROLLOUT"
+    }
+  },
+  {
+    "name": "missing attribute never matches, even NOT_EQUALS",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "NOT_EQUALS",
+          "value": "US"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "unknown operator never matches",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "STARTS_WITH",
+          "value": "I"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "all rules must match",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 100,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "EQUALS",
+          "value": "IN"
+        },
+        {
+          "attribute": "plan",
+          "operator": "EQUALS",
+          "value": "free"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "RULES_NOT_MATCHED"
+    }
+  },
+  {
+    "name": "rules pass, then rollout decides",
+    "flag": {
+      "flagKey": "dark-mode",
+      "enabled": true,
+      "rolloutPercentage": 1,
+      "rules": [
+        {
+          "attribute": "country",
+          "operator": "EQUALS",
+          "value": "IN"
+        }
+      ]
+    },
+    "userId": "ravi",
+    "attributes": {
+      "country": "IN",
+      "plan": "pro"
+    },
+    "expected": {
+      "enabled": false,
+      "reason": "OUT_OF_ROLLOUT"
+    }
+  }
+]

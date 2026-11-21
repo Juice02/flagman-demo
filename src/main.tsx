@@ -16,7 +16,7 @@ function Stage() {
     <>
       <header className="topbar">
         <span className="brand"><span className="brand__mark" aria-hidden="true" />FlagMan</span>
-        <p className="topbar__note">Change a flag in the feature flag config. Each device asks FlagMan every 2 seconds and updates.</p>
+        <p className="topbar__note">Change a flag in the feature flag config. FlagMan pushes the change and each device updates straight away.</p>
       </header>
       <main className="stage">
         <ControlPanel />
