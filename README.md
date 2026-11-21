@@ -1,12 +1,12 @@
 # FlagMan demo
 
 A feature flag only shows its value when you can see the app change for different users. This demo
-puts a small control panel next to three devices running the same app, so a change to a flag in
+puts a small feature flag config next to three devices running the same app, so a change to a flag in
 [FlagMan](../flagman) shows up on each device within about two seconds.
 
 ## What it shows
 
-- **Stage** (`/`): a control panel for two flags in one environment, and three device frames. Each
+- **Stage** (`/`): a feature flag config for two flags in one environment, and three device frames. Each
   device is the Book Logger page for a different user:
 
   | Device | User | Country | Plan | Bucket `dark-mode` | Bucket `hide-non-fiction` |
@@ -20,11 +20,12 @@ puts a small control panel next to three devices running the same app, so a chan
   the result and reason FlagMan returns for each flag (`FLAG_DISABLED`, `RULES_NOT_MATCHED`,
   `IN_ROLLOUT`, `OUT_OF_ROLLOUT`).
 
-- **Book Logger** (`/app.html?user=…&country=…&plan=…`): a reading list with static sample books.
+- **Book Logger** (`/app.html?user=…&country=…&plan=…`): a reading app's "Recommended for you"
+  page, with static sample books.
   - `dark-mode` switches its theme.
-  - `hide-non-fiction` hides non-fiction books.
+  - `hide-non-fiction` removes non-fiction from the recommendations.
 
-The control panel offers an on/off switch, a rollout slider and three preset rules per flag:
+The feature flag config offers an on/off switch, a rollout slider and three preset rules per flag:
 
 | Preset | Rule |
 |--------|------|

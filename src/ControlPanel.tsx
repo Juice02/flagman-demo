@@ -5,14 +5,14 @@ import { FLAGS, PRESETS, presetFor, type FlagKey, type Preset, type Rule, type W
 
 const DESCRIPTIONS: Record<FlagKey, string> = {
   'dark-mode': 'Switches Book Logger to its dark theme.',
-  'hide-non-fiction': 'Hides non-fiction books from the list.',
+  'hide-non-fiction': 'Hides non-fiction from recommendations.',
 }
 
 export function ControlPanel() {
   return (
     <aside className="cp" aria-labelledby="cp-title">
       <div className="cp__head">
-        <h1 id="cp-title">Control panel</h1>
+        <h1 id="cp-title">Feature flag config</h1>
         <p className="muted small">Project {PROJECT_ID ?? '—'} · <span className="mono">{ENVIRONMENT}</span></p>
       </div>
       {PROJECT_ID === null ? (

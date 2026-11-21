@@ -5,7 +5,7 @@ const API = process.env.FLAGMAN_API_URL || process.env.VITE_FLAGMAN_API_URL || '
 const PROJECT = 'Book Logger demo'
 const FLAGS = [
   { flagKey: 'dark-mode', friendlyName: 'Dark mode', description: 'Switches Book Logger to its dark theme.' },
-  { flagKey: 'hide-non-fiction', friendlyName: 'Hide non-fiction', description: 'Hides non-fiction books from the list.' },
+  { flagKey: 'hide-non-fiction', friendlyName: 'Hide non-fiction', description: 'Hides non-fiction from recommendations.' },
 ]
 
 async function call(method, path, body) {
