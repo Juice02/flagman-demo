@@ -35,3 +35,5 @@ ul { list-style: none; }
   .bl-genre { margin-left: 58px; }
 }
 @media (prefers-reduced-motion: reduce) { .bl { transition: none; } }
+.bl-status { display: grid; gap: 2px; margin: 0 0 16px; }
+.bl-status strong { color: var(--ink); font-variant-numeric: tabular-nums; }

@@ -1,22 +1,22 @@
-// Settings from .env and one fetch helper. Every VITE_ variable is bundled into the page that
-// visitors download, so none of them may hold a key, token or password.
-const env = import.meta.env
-const ENVIRONMENTS = ['DEV', 'STAGING', 'PREPROD', 'PROD']
+// The API address and one fetch helper. Every VITE_ variable is bundled into the page that visitors
+// download, so none of them may hold a key, token or password.
+export const API_URL: string = import.meta.env.VITE_FLAGMAN_API_URL || 'http://localhost:8081'
 
-export const API_URL: string = env.VITE_FLAGMAN_API_URL || 'http://localhost:8081'
-const id = Number(env.VITE_FLAGMAN_PROJECT_ID)
-export const PROJECT_ID: number | null = Number.isInteger(id) && id > 0 ? id : null
-export const ENVIRONMENT: string = ENVIRONMENTS.includes(env.VITE_FLAGMAN_ENVIRONMENT) ? env.VITE_FLAGMAN_ENVIRONMENT : 'DEV'
-
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null = null) {
+    super(message)
+    this.status = status
+  }
+}
 
 // Errors become short messages: the API's RFC 9457 `detail`, or a fixed line. Never the raw response.
-export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+export async function request<T>(path: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   let res: Response
   try {
     res = await fetch(API_URL + path, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -24,7 +24,7 @@ export async function request<T>(path: string, method = 'GET', body?: unknown): 
   }
   if (!res.ok) {
     const problem = await res.json().catch(() => null)
-    throw new ApiError(typeof problem?.detail === 'string' ? problem.detail : `Request failed (${res.status}).`)
+    throw new ApiError(typeof problem?.detail === 'string' ? problem.detail : `Request failed (${res.status}).`, res.status)
   }
   return (res.status === 204 ? undefined : await res.json()) as T
 }

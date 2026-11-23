@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './app.css'
 import { userFromParams } from './allowlist'
 import { useFlag } from './flags'
+import { ServerStatus } from './ServerStatus'
 
 type Book = { title: string; author: string; genre: 'Fiction' | 'Non-fiction'; blurb: string }
 
@@ -31,6 +32,7 @@ function BookLogger() {
         <p className="bl-user">{user.id}</p>
       </header>
       <main className="bl-main">
+        {window.parent === window && <ServerStatus className="bl-note bl-status" />}
         <h1>Recommended for you</h1>
         <p className="bl-sub">{books.length} picks{hideNonFiction.enabled && ' · fiction only'}</p>
         <ul className="bl-list">

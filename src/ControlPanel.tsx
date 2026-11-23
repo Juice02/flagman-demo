@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-import { ENVIRONMENT, PROJECT_ID } from './api'
 import { readConfig, readRules, write, type Config } from './admin'
 import { useFlagState } from './flags'
+import { ServerStatus } from './ServerStatus'
 import { FLAGS, PRESETS, presetFor, type FlagKey, type Preset, type Rule, type Write } from './allowlist'
 
 const DESCRIPTIONS: Record<FlagKey, string> = {
@@ -10,17 +10,18 @@ const DESCRIPTIONS: Record<FlagKey, string> = {
 }
 
 export function ControlPanel() {
+  const { sandbox, snapshot } = useFlagState()
   return (
     <aside className="cp" aria-labelledby="cp-title">
       <div className="cp__head">
         <h1 id="cp-title">Feature flag config</h1>
-        <p className="muted small">Project {PROJECT_ID ?? '—'} · <span className="mono">{ENVIRONMENT}</span></p>
+        <p className="muted small">
+          Your own copy of the demo flags{sandbox && <> · <span className="mono">{sandbox.environment}</span></>}.
+          Changes are visible only in this browser; copies unused for a day are deleted.
+        </p>
       </div>
-      {PROJECT_ID === null ? (
-        <p className="error">Set VITE_FLAGMAN_PROJECT_ID in .env (npm run seed prints it), then restart npm run dev.</p>
-      ) : (
-        FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)
-      )}
+      <ServerStatus className="server-status" />
+      {sandbox && snapshot && FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)}
     </aside>
   )
 }
@@ -39,7 +40,7 @@ function FlagControls({ flagKey }: { flagKey: FlagKey }) {
     setRules(r)
   }, [flagKey])
 
-  // Re-read whenever FlagMan announces a new revision, so changes made elsewhere (another visitor,
+  // Re-read whenever FlagMan announces a new revision, so changes made elsewhere (another tab,
   // the dashboard) show up here without a reload.
   const revision = useFlagState().snapshot?.revision
   useEffect(() => {

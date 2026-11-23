@@ -33,6 +33,11 @@ The feature flag config offers an on/off switch, a rollout slider and three pres
 | Country is one of [IN,GB \| IN \| GB \| US] | `country IN <value>` |
 | Plan equals [pro \| free] | `plan EQUALS <value>` |
 
+Each browser gets its own **sandbox**: a private copy of the two flags in FlagMan, so visitors don't see
+each other's changes. The first demo page in a browser asks FlagMan for one (`POST /sandboxes`) and
+keeps its project ID and token in `localStorage`; every other demo page in that browser uses the same
+one. FlagMan deletes sandboxes unused for a day; the demo then quietly asks for a new one.
+
 Rules added elsewhere (for example in the FlagMan dashboard) still apply; the panel counts them but does not show or change them.
 
 ## How changes reach the devices
@@ -53,6 +58,10 @@ Locks need HTTPS or localhost; without them each page opens its own stream. If F
 browser's `EventSource` keeps retrying; the devices keep the last snapshot and show a short note
 until it reconnects.
 
+Until the first snapshot arrives, the page shows "Starting the FlagMan server… N s", counting up. On a
+free host the API sleeps when idle and takes 30–60 seconds to wake; after two minutes the message
+changes to "FlagMan isn't responding".
+
 ## Running it
 
 Needs Node 22+ and a running FlagMan.
@@ -65,19 +74,18 @@ Needs Node 22+ and a running FlagMan.
    CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
    ```
    then run `make up` again in `../flagman`.
-3. **Install and seed.**
+3. **Install.**
    ```sh
    npm install
    cp .env.example .env
-   npm run seed     # creates the "Book Logger demo" project and both flags; safe to run again
    ```
-   Put the printed `VITE_FLAGMAN_PROJECT_ID` in `.env`.
 4. **Start the demo.**
    ```sh
    npm run dev      # http://localhost:5174
    ```
 
-Needs FlagMan with the snapshot stream (the `live-flags` branch of `../flagman` or later).
+Needs FlagMan with sandboxes (the `sandboxes` branch of `../flagman` or later). To host it, see
+"Hosting on Render" in FlagMan's README; its `render.yaml` also builds this demo.
 
 `npm test` runs a self-check of the write guard and the device URL parser, and the evaluation cases
 shared with FlagMan (plain Node, no test library).
@@ -87,8 +95,6 @@ shared with FlagMan (plain Node, no test library).
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VITE_FLAGMAN_API_URL` | `http://localhost:8081` | FlagMan API the browser calls |
-| `VITE_FLAGMAN_PROJECT_ID` | none | Project created by `npm run seed` |
-| `VITE_FLAGMAN_ENVIRONMENT` | `DEV` | Environment the panel edits and the devices evaluate |
 
 Every `VITE_` variable is bundled into the page the browser downloads. None of them may hold a key,
 token or password. `.env` is git-ignored; only `.env.example` is committed.
@@ -99,12 +105,12 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 |------|--------------|
 | `src/allowlist.ts` | The demo flags, users, attribute values and preset rules, plus `checkWrite` and `userFromParams` |
 | `src/admin.ts` | `write()`, the only function that changes FlagMan; runs `checkWrite` first |
-| `src/flags.ts` | The flag client: one stream per browser shared over a `BroadcastChannel`, `useFlag`, `useFlagState`, `isEnabled` |
+| `src/flags.ts` | The flag client: this browser's sandbox, one stream per browser shared over a `BroadcastChannel`, `useFlag`, `useFlagState`, `isEnabled` |
 | `src/evaluate.ts` | Flag evaluation in the browser, a copy of FlagMan's `Evaluator.java`, and the snapshot shape check |
 | `scripts/evaluation-cases.json` | Cases shared with FlagMan (copied from `../flagman/src/test/resources`; keep the two files the same) |
 | `src/ControlPanel.tsx`, `src/main.tsx` | Stage page |
 | `src/app.tsx` | Book Logger page |
-| `scripts/seed.mjs` | Creates the demo project through the API |
+| `src/ServerStatus.tsx` | The "Starting the FlagMan server" message |
 
 ## Security
 
@@ -113,8 +119,11 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 - **One write path.** Every change goes through `write()` in `src/admin.ts`, which checks it against
   the allowlist in `src/allowlist.ts`. Only these calls get through: PATCH `enabled`/`rolloutPercentage`
   (whole number 0–100) on the two demo flags, POST one of the preset rules, and DELETE a rule that
-  FlagMan reports as a preset rule. Project and environment come from `.env`, not from the caller. The
-  demo has no code that creates or deletes projects or flags.
+  FlagMan reports as a preset rule. Writes go to this browser's own sandbox with its token. The demo
+  has no code that creates or deletes flags.
+- **FlagMan enforces the same limits.** With `FLAGMAN_ADMIN_KEY` set, a sandbox token can only make
+  those preset changes on its own sandbox; everything else needs the admin key, which the demo never
+  has. The browser-side guard is a second check, not the protection.
 - **Untrusted URL parameters.** Book Logger accepts `user`, `country` and `plan` only from allowlists
   and otherwise falls back to a demo user's own values. All text is rendered by React; nothing builds
   HTML from strings.
@@ -126,29 +135,18 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   every snapshot, from the stream or the channel, must match the expected shape.
 - **Errors.** The UI shows the API's `detail` message or a short fixed line, never a raw response.
   When FlagMan can't be reached, the devices keep the last result and show a short note.
+- **Content-Security-Policy.** Production builds only run this site's own scripts and only connect to
+  the FlagMan API (a `<meta>` tag added in `vite.config.ts`); the host adds `frame-ancestors 'self'`.
 - **Dependencies.** Only the Vite react-ts template packages.
 
 **What it does not protect against**
 
-- **The FlagMan API has no authentication.** Anyone who can reach it can call any endpoint directly:
-  change any flag, add any rule, delete projects. The presets guide visitors; they don't stop someone
-  who opens the browser console or uses `curl`.
-- **Shared state.** All visitors edit the same project, so one visitor's change shows up for everyone.
-- **Rules are visible in the browser.** Snapshots carry every rule's attribute and value. The demo's
-  rules are harmless, but a rule like `email CONTAINS @bigcustomer.com` would be readable by anyone.
-  Real apps would need FlagMan to send full rules only to servers holding a secret key.
-- **Load.** Each open tab holds one idle connection; FlagMan does work only when a flag changes (one
-  snapshot per environment, sent to every open stream). Open connections still count toward the
-  server's connection limit, and nothing limits how many a visitor opens.
-
-**What hosting it would need** (not built)
-
-- A small demo backend that holds the API access, applies the same allowlist on the server and is
-  the only thing that can reach FlagMan, or authentication in FlagMan itself.
-- A sandbox project per visitor (or per session), so visitors don't overwrite each other.
-- Rate limiting on writes and on new stream connections.
-- A nightly reset of the demo data.
-- A Content-Security-Policy (`default-src 'self'`, `connect-src` set to the API,
-  `frame-ancestors 'self'`) and HTTPS.
-- A shared channel between FlagMan instances (e.g. Redis pub/sub) if FlagMan runs more than one
-  instance; open streams are held in one instance's memory.
+- **Using up the free tier.** Rate limits and caps slow down one address, but many addresses together
+  can still use up a free host's bandwidth or database quota and take the demo offline until it
+  resets. Nothing is lost; it is unavailable for a while.
+- **Rules are visible in the browser.** Snapshots carry every rule's attribute and value, so anyone
+  can read the rules of any sandbox, including other visitors' (sandbox IDs count up). For the demo's
+  preset rules that is harmless; real apps would need FlagMan to send full rules only to servers.
+- **One shared admin key.** There are no user accounts or history of who changed what. Don't host
+  real projects with sensitive data on the same FlagMan.
+- **Limits live in memory.** They reset when FlagMan restarts and assume a single instance.
