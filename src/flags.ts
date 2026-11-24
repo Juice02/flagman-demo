@@ -125,15 +125,19 @@ function openStream(sandbox: Sandbox) {
   })
   // EventSource reconnects by itself. Until then, keep the last snapshot and say FlagMan is unreachable.
   // If the sandbox itself is gone (deleted after a day unused), start over with a new one.
+  // The browser stops retrying for good after an error answer (e.g. a 502 while Render restarts or wakes
+  // up); then reopen the stream ourselves.
   stream.onerror = () => {
     if (state.error === null) setState({ ...state, error: UNREACHABLE })
+    const gaveUp = stream.readyState === EventSource.CLOSED
+    const reopen = () => { if (gaveUp) setTimeout(() => openStream(sandbox), 3_000) }
     fetch(`${base}/snapshot`).then((res) => {
-      if (res.status !== 404) return
+      if (res.status !== 404) return reopen()
       stream.close()
       storeSandbox(null)
       setState({ sandbox: null, snapshot: null, error: null })
       void connect()
-    }, () => { /* still unreachable; EventSource keeps trying */ })
+    }, reopen)
   }
 }
 
