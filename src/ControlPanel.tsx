@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { readConfig, readRules, write, type Config } from './admin'
 import { useFlagState } from './flags'
 import { ServerStatus } from './ServerStatus'
@@ -32,11 +32,16 @@ function FlagControls({ flagKey }: { flagKey: FlagKey }) {
   const [rollout, setRollout] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const storedRollout = useRef(0) // the rollout FlagMan had at the last read
 
   const load = useCallback(async () => {
     const [c, r] = await Promise.all([readConfig(flagKey), readRules(flagKey)])
     setConfig(c)
-    setRollout(c.rolloutPercentage)
+    // Follow FlagMan's value only if the slider still shows the last stored one. A refresh that lands
+    // while the visitor is moving the slider (on a hosted API that is ~0.3 s after any change) keeps their value.
+    const previous = storedRollout.current
+    storedRollout.current = c.rolloutPercentage
+    setRollout((shown) => (shown === previous ? c.rolloutPercentage : shown))
     setRules(r)
   }, [flagKey])
 
