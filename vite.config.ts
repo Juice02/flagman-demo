@@ -6,8 +6,8 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 // frame-ancestors can't be set in a meta tag; the host sends it as a header (render.yaml in ../flagman).
 function contentSecurityPolicy(apiUrl: string): Plugin {
   const policy = [
-    "default-src 'self'", "script-src 'self'", "style-src 'self' https://fonts.googleapis.com",
-    'font-src https://fonts.gstatic.com', "img-src 'self' data:", `connect-src ${new URL(apiUrl).origin}`,
+    "default-src 'self'", "script-src 'self'", "style-src 'self'",
+    "font-src 'self'", "img-src 'self' data:", `connect-src ${new URL(apiUrl).origin}`,
     "frame-src 'self'", "base-uri 'self'", "form-action 'self'", "object-src 'none'",
   ].join('; ')
   return {

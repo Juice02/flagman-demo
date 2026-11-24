@@ -1,3 +1,8 @@
+/* Fonts are served from this site (public/fonts), not Google, so visitors' IPs aren't sent to a third party. Latin subset only. */
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-stretch: 75% 100%; font-display: swap; src: url("/fonts/instrument-sans-latin.woff2") format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/dm-mono-400-latin.woff2") format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/dm-mono-500-latin.woff2") format("woff2"); }
+
 /* Tokens copied from ../flagman/dashboard/src/index.css (:root) so the stage reads as part of FlagMan. */
 :root {
   --bg: #0f0f0f;
