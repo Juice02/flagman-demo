@@ -2,7 +2,9 @@
 
 A feature flag only shows its value when you can see the app change for different users. This demo
 puts a small feature flag config next to three devices running the same app, so a change to a flag in
-[FlagMan](../flagman) shows up on each device as soon as it is saved.
+[FlagMan](https://github.com/Juice02/Flagman) shows up on each device as soon as it is saved.
+
+Live: https://flagman-demo.onrender.com. The API sleeps when idle, so the first load can take 1–2 minutes.
 
 ## What it shows
 
@@ -59,7 +61,7 @@ browser's `EventSource` keeps retrying; the devices keep the last snapshot and s
 until it reconnects.
 
 Until the first snapshot arrives, the page shows "Starting the FlagMan server… N s", counting up. On a
-free host the API sleeps when idle and takes 30–60 seconds to wake; after two minutes the message
+free host the API sleeps when idle and takes about 1–2 minutes to wake; after two minutes the message
 changes to "FlagMan isn't responding".
 
 ## Running it
@@ -84,7 +86,7 @@ Needs Node 22+ and a running FlagMan.
    npm run dev      # http://localhost:5174
    ```
 
-Needs FlagMan with sandboxes (the `sandboxes` branch of `../flagman` or later). To host it, see
+Needs [FlagMan](https://github.com/Juice02/Flagman). To host it, see
 "Hosting on Render" in FlagMan's README; its `render.yaml` also builds this demo.
 
 `npm test` runs a self-check of the write guard and the device URL parser, and the evaluation cases
