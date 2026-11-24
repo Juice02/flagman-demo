@@ -15,9 +15,15 @@ export function ControlPanel() {
     <aside className="cp" aria-labelledby="cp-title">
       <div className="cp__head">
         <h1 id="cp-title">Feature flag config</h1>
+        <p className="small">Try it:</p>
+        <ol className="cp__steps small">
+          <li>Turn on <span className="mono">dark-mode</span>.</li>
+          <li>Set Rollout to 30% and press Save. Only Ravi's device turns dark.</li>
+          <li>Raise it to 100%, then tick a rule and watch who drops out.</li>
+        </ol>
         <p className="muted small">
-          Your own copy of the demo flags{sandbox && <> · <span className="mono">{sandbox.environment}</span></>}.
-          Changes are visible only in this browser; copies unused for a day are deleted.
+          These flags are your own copy{sandbox && <> (<span className="mono">{sandbox.environment}</span>)</>}. Only this
+          browser sees your changes, and copies unused for a day are deleted.
         </p>
       </div>
       <ServerStatus className="server-status" />

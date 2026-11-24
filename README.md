@@ -61,7 +61,7 @@ browser's `EventSource` keeps retrying; the devices keep the last snapshot and s
 until it reconnects.
 
 Until the first snapshot arrives, the page shows "Starting the FlagMan server… N s", counting up. On a
-free host the API sleeps when idle and takes about 1–2 minutes to wake; after two minutes the message
+free host the API sleeps when idle and takes about 1–2 minutes to wake; after four minutes the message
 changes to "FlagMan isn't responding".
 
 ## Running it
