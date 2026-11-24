@@ -17,7 +17,7 @@ export function ServerStatus({ className }: { className: string }) {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (!waiting || seconds < 2) return null
   if (error && !isUnreachable(error)) return <p className={className} role="alert">{error}</p>
-  if (seconds > 120) return <p className={className} role="alert">FlagMan isn't responding. Try reloading in a minute.</p>
+  if (seconds > 240) return <p className={className} role="alert">FlagMan isn't responding. Try reloading in a minute.</p>
   return (
     <p className={className} role="status">
       <strong>Starting the FlagMan server… {seconds} s</strong>
