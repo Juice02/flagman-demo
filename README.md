@@ -44,6 +44,23 @@ Rules added elsewhere (for example in the FlagMan dashboard) still apply; the pa
 
 ## How changes reach the devices
 
+```mermaid
+sequenceDiagram
+    participant Panel as Feature flag config
+    participant API as FlagMan API
+    participant DB as Database
+    participant Lead as Stream page (holds the Web Lock)
+    participant Dev as Devices and other tabs
+    Note over Panel,API: First visit: POST /sandboxes, token kept in localStorage
+    Lead->>API: GET .../stream (opened once per browser)
+    API-->>Lead: snapshot (on open)
+    Panel->>API: PATCH config or POST/DELETE rule, with X-Sandbox-Token
+    API->>DB: save change, revision + 1
+    API-->>Lead: snapshot (after the commit)
+    Lead-->>Dev: snapshot over BroadcastChannel
+    Dev->>Dev: evaluate each flag for its user (src/evaluate.ts)
+```
+
 One page opens a stream to FlagMan (`GET /projects/{id}/environments/{env}/stream`, Server-Sent
 Events). FlagMan sends a snapshot of every flag in that environment (enabled, rollout, rules) when the
 stream opens and again after each change is committed. That page passes each snapshot to every other
@@ -57,8 +74,9 @@ HTTP/1.1: with a stream per page, six open demo pages would leave no connection 
 every request to FlagMan would hang. The page that holds a Web Lock (`navigator.locks`) opens the
 stream; when it closes, the lock passes to another open page, which opens the stream instead. Web
 Locks need HTTPS or localhost; without them each page opens its own stream. If FlagMan stops, the
-browser's `EventSource` keeps retrying; the devices keep the last snapshot and show a short note
-until it reconnects.
+browser's `EventSource` keeps retrying; if FlagMan answers with an error instead (a 502 while the host
+restarts or wakes up), the browser stops retrying, so the page reopens the stream itself every 3 s. The
+devices keep the last snapshot and show a short note until it reconnects.
 
 Until the first snapshot arrives, the page shows "Starting the FlagMan server… N s", counting up. On a
 free host the API sleeps when idle and takes about 1–2 minutes to wake; after four minutes the message
