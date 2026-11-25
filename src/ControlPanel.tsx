@@ -10,7 +10,7 @@ const DESCRIPTIONS: Record<FlagKey, string> = {
 }
 
 export function ControlPanel() {
-  const { sandbox, snapshot } = useFlagState()
+  const { sandbox, revision } = useFlagState()
   return (
     <aside className="cp" aria-labelledby="cp-title">
       <div className="cp__head">
@@ -27,7 +27,7 @@ export function ControlPanel() {
         </p>
       </div>
       <ServerStatus className="server-status" />
-      {sandbox && snapshot && FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)}
+      {sandbox && revision !== null && FLAGS.map((f) => <FlagControls key={f} flagKey={f} />)}
     </aside>
   )
 }
@@ -53,7 +53,7 @@ function FlagControls({ flagKey }: { flagKey: FlagKey }) {
 
   // Re-read whenever FlagMan announces a new revision, so changes made elsewhere (another tab,
   // the dashboard) show up here without a reload.
-  const revision = useFlagState().snapshot?.revision
+  const revision = useFlagState().revision
   useEffect(() => {
     load().catch((e: Error) => setError(e.message))
   }, [load, revision])

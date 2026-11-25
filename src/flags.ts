@@ -1,23 +1,29 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { API_URL, ApiError, request } from './api'
-import type { User } from './allowlist'
-import { evaluate, isSnapshot, type Reason, type Snapshot } from './evaluate'
+import { FLAGS, type User } from './allowlist'
 
 // Flag client. Each browser gets its own sandbox: a private copy of the demo flags in FlagMan, which only
 // this browser's token can change. All demo pages open in the browser (the stage, its device iframes,
 // other tabs) share it and one stream: one page holds a Web Lock, gets the sandbox, opens the stream and
 // passes the state to the others over a BroadcastChannel. Browsers allow only 6 connections per host over
 // HTTP/1.1, so a stream per page would hang every request once six demo pages were open. When the page
-// holding the lock closes, another page takes over. Flags are evaluated locally (evaluate.ts).
+// holding the lock closes, another page takes over.
+//
+// The stream says only that something changed (revision N), never the rules. Each device then asks FlagMan
+// for its own user's flags (POST /evaluate/flags), as a browser or mobile app would in production, and
+// shares the answer with the stage over a second channel, so the labels under the devices need no calls.
 
 export type Sandbox = { projectId: number; environment: string; token: string }
-type State = { sandbox: Sandbox | null; snapshot: Snapshot | null; error: string | null }
+type State = { sandbox: Sandbox | null; revision: number | null; error: string | null }
+export type Reason = 'FLAG_DISABLED' | 'RULES_NOT_MATCHED' | 'IN_ROLLOUT' | 'OUT_OF_ROLLOUT'
+type Result = { enabled: boolean; reason: Reason }
+type Results = { projectId: number; userId: string; revision: number; flags: Record<string, Result> }
 
 const UNREACHABLE = "Can't reach FlagMan."
 const SANDBOX_KEY = 'flagman-sandbox'
 export const startedAt = Date.now()
 
-let state: State = { sandbox: null, snapshot: null, error: null }
+let state: State = { sandbox: null, revision: null, error: null }
 let leader = false
 const listeners = new Set<() => void>()
 const channel = new BroadcastChannel('flagman-flags-v2') // bump the version when the message shape changes, so old tabs and new ones don't wait on each other
@@ -48,8 +54,8 @@ function start() {
     }
     const d = e.data as State
     const ok = typeof d === 'object' && d !== null && (d.sandbox === null || isSandbox(d.sandbox))
-      && (d.snapshot === null || isSnapshot(d.snapshot)) && (d.error === null || typeof d.error === 'string')
-    if (ok && !leader) setState({ sandbox: d.sandbox, snapshot: d.snapshot, error: d.error })
+      && (d.revision === null || Number.isInteger(d.revision)) && (d.error === null || typeof d.error === 'string')
+    if (ok && !leader) setState({ sandbox: d.sandbox, revision: d.revision, error: d.error })
   }
   channel.postMessage('ready')
 
@@ -88,7 +94,7 @@ async function connect() {
       let sandbox = readStoredSandbox()
       if (sandbox) {
         // Sandboxes unused for a day are deleted; then make a new one.
-        const exists = await fetch(`${API_URL}/projects/${sandbox.projectId}/environments/${sandbox.environment}/snapshot`)
+        const exists = await fetch(`${API_URL}/projects/${sandbox.projectId}`)
         if (exists.status === 404) sandbox = null
         else if (!exists.ok) throw new ApiError(`Request failed (${exists.status}).`, exists.status)
       }
@@ -112,18 +118,19 @@ async function connect() {
 
 function openStream(sandbox: Sandbox) {
   const base = `${API_URL}/projects/${sandbox.projectId}/environments/${sandbox.environment}`
-  const stream = new EventSource(`${base}/stream`)
-  let fresh = true // the first snapshot after a (re)connect is current, even if its revision is lower
+  const stream = new EventSource(`${base}/stream?revisionOnly=true`)
+  let fresh = true // the first event after a (re)connect is current, even if its revision is lower
   stream.onopen = () => { fresh = true }
-  stream.addEventListener('snapshot', (e) => {
-    let data: unknown
+  stream.addEventListener('change', (e) => {
+    let data: { projectId?: unknown; revision?: unknown }
     try { data = JSON.parse(e.data) } catch { return }
-    if (!isSnapshot(data) || data.projectId !== sandbox.projectId) return
+    if (data?.projectId !== sandbox.projectId || !Number.isInteger(data.revision)) return
+    const revision = data.revision as number
     // Two quick changes can be broadcast out of order; keep the newest.
-    if (fresh || !state.snapshot || data.revision >= state.snapshot.revision) setState({ ...state, snapshot: data, error: null })
+    if (fresh || state.revision === null || revision >= state.revision) setState({ ...state, revision, error: null })
     fresh = false
   })
-  // EventSource reconnects by itself. Until then, keep the last snapshot and say FlagMan is unreachable.
+  // EventSource reconnects by itself. Until then, the devices keep their last answers and say FlagMan is unreachable.
   // If the sandbox itself is gone (deleted after a day unused), start over with a new one.
   // The browser stops retrying for good after an error answer (e.g. a 502 while Render restarts or wakes
   // up); then reopen the stream ourselves.
@@ -131,11 +138,11 @@ function openStream(sandbox: Sandbox) {
     if (state.error === null) setState({ ...state, error: UNREACHABLE })
     const gaveUp = stream.readyState === EventSource.CLOSED
     const reopen = () => { if (gaveUp) setTimeout(() => openStream(sandbox), 3_000) }
-    fetch(`${base}/snapshot`).then((res) => {
+    fetch(`${API_URL}/projects/${sandbox.projectId}`).then((res) => {
       if (res.status !== 404) return reopen()
       stream.close()
       storeSandbox(null)
-      setState({ sandbox: null, snapshot: null, error: null })
+      setState({ sandbox: null, revision: null, error: null })
       void connect()
     }, reopen)
   }
@@ -149,19 +156,84 @@ function subscribe(listener: () => void) {
 
 export const getFlagState = () => state
 
-// The sandbox, latest snapshot and connection error; re-renders on every change.
+// The sandbox, latest revision and connection error; re-renders on every change.
 export const useFlagState = () => useSyncExternalStore(subscribe, getFlagState)
 
 export const isUnreachable = (error: string | null) => error === UNREACHABLE
 
-export function useFlag(flagKey: string, user: User): { enabled: boolean; reason: Reason | null; error: string | null } {
-  const { snapshot, error } = useFlagState()
-  const flag = snapshot?.flags.find((f) => f.flagKey === flagKey)
-  if (!flag) return { enabled: false, reason: null, error: snapshot ? `Flag ${flagKey} not found.` : error }
-  return { ...evaluate(flag, user.id, user.attributes), error }
+// --- Answers from FlagMan, per user. Shared between pages, so the stage shows what each device got.
+
+let results: Record<string, Results> = {}
+const resultListeners = new Set<() => void>()
+const resultChannel = new BroadcastChannel('flagman-results-v1')
+const REASONS: readonly string[] = ['FLAG_DISABLED', 'RULES_NOT_MATCHED', 'IN_ROLLOUT', 'OUT_OF_ROLLOUT']
+
+const isResults = (x: unknown): x is Results => {
+  const r = x as Results
+  return typeof r === 'object' && r !== null && Number.isInteger(r.projectId) && typeof r.userId === 'string'
+    && Number.isInteger(r.revision) && isFlags(r.flags)
+}
+function isFlags(x: unknown): x is Record<string, Result> {
+  const f = x as Record<string, Result>
+  return typeof f === 'object' && f !== null && FLAGS.every((k) =>
+    typeof f[k]?.enabled === 'boolean' && REASONS.includes(f[k].reason))
 }
 
-export function isEnabled(flagKey: string, user: User): boolean {
-  const flag = state.snapshot?.flags.find((f) => f.flagKey === flagKey)
-  return flag ? evaluate(flag, user.id, user.attributes).enabled : false
+// Keeps the newest answer per user. A new sandbox starts its revisions again, so compare within one sandbox only.
+function storeResults(r: Results) {
+  const old = results[r.userId]
+  if (old && old.projectId === r.projectId && old.revision > r.revision) return
+  results = { ...results, [r.userId]: r }
+  resultListeners.forEach((l) => l())
+}
+resultChannel.onmessage = (e) => { if (isResults(e.data)) storeResults(e.data) }
+
+let latestAsk = 0 // answers to older asks are dropped, so a slow answer can't overwrite a newer one
+
+// Asks FlagMan for every demo flag for this user. Hidden tabs wait until they are shown (see useEvaluate).
+async function ask(user: User) {
+  const { sandbox, revision } = state
+  if (!sandbox || revision === null || document.hidden) return
+  const mine = ++latestAsk
+  try {
+    const flags = await request<unknown>('/evaluate/flags', 'POST', {
+      projectId: sandbox.projectId, environment: sandbox.environment,
+      userId: user.id, attributes: user.attributes, flagKeys: FLAGS,
+    })
+    if (mine !== latestAsk) return
+    if (!isFlags(flags)) throw new ApiError('Unexpected answer from FlagMan.')
+    const r: Results = { projectId: sandbox.projectId, userId: user.id, revision, flags }
+    storeResults(r)
+    resultChannel.postMessage(r)
+  } catch {
+    // Keep the last answer on screen (the stream's note says if FlagMan is unreachable) and try again.
+    setTimeout(() => { if (mine === latestAsk) void ask(user) }, 3_000)
+  }
+}
+
+// For a device page: asks on load and after every change, and when a hidden tab is shown again.
+export function useEvaluate(user: User) {
+  const { sandbox, revision } = useFlagState()
+  useEffect(() => { void ask(user) }, [user, sandbox?.projectId, revision])
+  useEffect(() => {
+    const onShow = () => {
+      const r = results[user.id]
+      if (!document.hidden && (r?.projectId !== state.sandbox?.projectId || (r?.revision ?? -1) < (state.revision ?? -1))) void ask(user)
+    }
+    document.addEventListener('visibilitychange', onShow)
+    return () => document.removeEventListener('visibilitychange', onShow)
+  }, [user])
+}
+
+function subscribeResults(listener: () => void) {
+  resultListeners.add(listener)
+  return () => { resultListeners.delete(listener) }
+}
+
+// FlagMan's latest answer for this user and flag; makes no request itself (useEvaluate does).
+export function useFlag(flagKey: string, user: User): { enabled: boolean; reason: Reason | null; error: string | null } {
+  const { error } = useFlagState()
+  const r = useSyncExternalStore(subscribeResults, () => results[user.id])
+  const flag = r?.flags[flagKey]
+  return { enabled: flag?.enabled ?? false, reason: flag?.reason ?? null, error }
 }
