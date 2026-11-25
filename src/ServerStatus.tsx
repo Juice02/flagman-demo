@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { isUnreachable, startedAt, useFlagState } from './flags'
 
-// Shown until the first snapshot arrives. A free server sleeps when idle and takes a while to wake, so
+// Shown until the stream first reports a revision. A free server sleeps when idle and takes a while to wake, so
 // count the seconds up (a countdown would hit zero before the server is ready).
 export function ServerStatus({ className }: { className: string }) {
-  const { snapshot, error } = useFlagState()
-  const waiting = snapshot === null
+  const { revision, error } = useFlagState()
+  const waiting = revision === null
   const [now, setNow] = useState(startedAt)
 
   useEffect(() => {

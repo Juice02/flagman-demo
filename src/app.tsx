@@ -2,7 +2,7 @@ import { StrictMode, type CSSProperties } from 'react'
 import { createRoot } from 'react-dom/client'
 import './app.css'
 import { userFromParams } from './allowlist'
-import { useFlag } from './flags'
+import { useEvaluate, useFlag } from './flags'
 import { ServerStatus } from './ServerStatus'
 
 type Book = { title: string; author: string; genre: 'Fiction' | 'Non-fiction'; blurb: string }
@@ -21,6 +21,7 @@ const BOOKS: Book[] = [
 const user = userFromParams(new URLSearchParams(location.search))
 
 function BookLogger() {
+  useEvaluate(user) // this device asks FlagMan for its user's flags
   const dark = useFlag('dark-mode', user)
   const hideNonFiction = useFlag('hide-non-fiction', user)
   const books = hideNonFiction.enabled ? BOOKS.filter((b) => b.genre === 'Fiction') : BOOKS

@@ -44,23 +44,49 @@ Rules added elsewhere (for example in the FlagMan dashboard) still apply; the pa
 
 ## How changes reach the devices
 
-One page opens a stream to FlagMan (`GET /projects/{id}/environments/{env}/stream`, Server-Sent
-Events). FlagMan sends a snapshot of every flag in that environment (enabled, rollout, rules) when the
-stream opens and again after each change is committed. That page passes each snapshot to every other
-demo page in the browser (the device iframes and other tabs) over a `BroadcastChannel`, and each device
-evaluates its flags in the browser with `src/evaluate.ts`, a copy of FlagMan's `Evaluator`. Nothing polls: while no flag changes, the demo sends
-no requests. The panel re-reads its configs when a new snapshot arrives, so changes made elsewhere
-show up without a reload.
+```mermaid
+sequenceDiagram
+    participant Panel as Feature flag config
+    participant API as FlagMan API
+    participant DB as Database
+    participant Lead as Stream page (holds the Web Lock)
+    participant Dev as Each device
+    Note over Panel,API: First visit: POST /sandboxes, token kept in localStorage
+    Lead->>API: GET .../stream?revisionOnly=true (once per browser)
+    API-->>Lead: change: revision N (on open)
+    Panel->>API: PATCH config or POST/DELETE rule, with X-Sandbox-Token
+    API->>DB: save change, revision + 1
+    API-->>Lead: change: revision N+1 (after the commit, no rules)
+    Lead-->>Dev: revision over BroadcastChannel
+    Dev->>API: POST /evaluate/flags (its user, all flags)
+    API-->>Dev: enabled + reason per flag
+```
+
+Flags are evaluated by FlagMan, the way a browser or mobile app uses a flag service in production:
+the page only learns *that* something changed, then asks the server for its own user's flags.
+
+One page opens a stream to FlagMan (`GET /projects/{id}/environments/{env}/stream?revisionOnly=true`,
+Server-Sent Events). FlagMan sends the current revision when the stream opens and a new one after each
+change is committed; it never sends the rules. That page passes the revision to every other demo page in
+the browser (the device iframes and other tabs) over a `BroadcastChannel`. Each device then calls
+`POST /evaluate/flags` once with its user and both flags and shows FlagMan's answer: one request per
+device per change. Each answer is shared with the stage over a second channel, so the labels under the
+devices make no calls of their own. Devices in a hidden tab wait until the tab is shown, and an answer to
+an older request never replaces a newer one. Nothing polls: while no flag changes, the demo sends no
+requests. The panel re-reads its configs when a new revision arrives, so changes made elsewhere show up
+without a reload.
 
 One stream per browser, not per page, because browsers allow only 6 connections per host over
 HTTP/1.1: with a stream per page, six open demo pages would leave no connection for anything else and
 every request to FlagMan would hang. The page that holds a Web Lock (`navigator.locks`) opens the
 stream; when it closes, the lock passes to another open page, which opens the stream instead. Web
 Locks need HTTPS or localhost; without them each page opens its own stream. If FlagMan stops, the
-browser's `EventSource` keeps retrying; the devices keep the last snapshot and show a short note
-until it reconnects.
+browser's `EventSource` keeps retrying; if FlagMan answers with an error instead (a 502 while the host
+restarts or wakes up), the browser stops retrying, so the page reopens the stream itself every 3 s. The
+devices keep their last answers and show a short note until it reconnects; a failed
+`/evaluate/flags` call is retried every 3 s.
 
-Until the first snapshot arrives, the page shows "Starting the FlagMan server… N s", counting up. On a
+Until the stream reports a first revision, the page shows "Starting the FlagMan server… N s", counting up. On a
 free host the API sleeps when idle and takes about 1–2 minutes to wake; after four minutes the message
 changes to "FlagMan isn't responding".
 
@@ -107,9 +133,7 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 |------|--------------|
 | `src/allowlist.ts` | The demo flags, users, attribute values and preset rules, plus `checkWrite` and `userFromParams` |
 | `src/admin.ts` | `write()`, the only function that changes FlagMan; runs `checkWrite` first |
-| `src/flags.ts` | The flag client: this browser's sandbox, one stream per browser shared over a `BroadcastChannel`, `useFlag`, `useFlagState`, `isEnabled` |
-| `src/evaluate.ts` | Flag evaluation in the browser, a copy of FlagMan's `Evaluator.java`, and the snapshot shape check |
-| `scripts/evaluation-cases.json` | Cases shared with FlagMan (copied from `../flagman/src/test/resources`; keep the two files the same) |
+| `src/flags.ts` | The flag client: this browser's sandbox, one stream per browser shared over a `BroadcastChannel`, `useEvaluate` (a device asks FlagMan for its flags), `useFlag`, `useFlagState` |
 | `src/ControlPanel.tsx`, `src/main.tsx` | Stage page |
 | `src/app.tsx` | Book Logger page |
 | `src/ServerStatus.tsx` | The "Starting the FlagMan server" message |
@@ -133,8 +157,8 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
   iframe has a `title`.
 - **No link to the full dashboard.** The dashboard can change any flag, rule or project, and FlagMan
   has no login, so linking to it from the demo would bypass the presets.
-- **Snapshots are checked before use.** Only same-origin pages can use the `BroadcastChannel`, and
-  every snapshot, from the stream or the channel, must match the expected shape.
+- **Messages are checked before use.** Only same-origin pages can use the `BroadcastChannel`s, and
+  every revision and answer, from FlagMan or a channel, must match the expected shape.
 - **Errors.** The UI shows the API's `detail` message or a short fixed line, never a raw response.
   When FlagMan can't be reached, the devices keep the last result and show a short note.
 - **Content-Security-Policy.** Production builds only run this site's own scripts and only connect to
@@ -146,9 +170,10 @@ token or password. `.env` is git-ignored; only `.env.example` is committed.
 - **Using up the free tier.** Rate limits and caps slow down one address, but many addresses together
   can still use up a free host's bandwidth or database quota and take the demo offline until it
   resets. Nothing is lost; it is unavailable for a while.
-- **Rules are visible in the browser.** Snapshots carry every rule's attribute and value, so anyone
-  can read the rules of any sandbox, including other visitors' (sandbox IDs count up). For the demo's
-  preset rules that is harmless; real apps would need FlagMan to send full rules only to servers.
+- **Rules can still be read.** The devices never receive rules, but FlagMan's read endpoints are open
+  (the panel uses them), so anyone can read any sandbox's rules, including other visitors' (sandbox IDs
+  count up). For the demo's preset rules that is harmless; a real deployment would put reads of
+  configs and rules behind a key too.
 - **One shared admin key.** There are no user accounts or history of who changed what. Don't host
   real projects with sensitive data on the same FlagMan.
 - **Limits live in memory.** They reset when FlagMan restarts and assume a single instance.
